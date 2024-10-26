@@ -19,13 +19,14 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "can.h"
+#include "dma.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "valuepack.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,11 +42,32 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 
+// Define message IDs
+#define CAN_ID_SPEED_A 0x101   // ID for sending speed to Device A
+#define CAN_ID_SPEED_B 0x102   // ID for sending speed to Device B
+#define CAN_ID_RPM_A   0x201   // ID for receiving RPM from Device A
+#define CAN_ID_RPM_B   0x202   // ID for receiving RPM from Device B
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+
+extern unsigned char vp_rxbuff[VALUEPACK_BUFFER_SIZE];
+RxPack rx_pack_ptr;
+
+
+CAN_TxHeaderTypeDef TxHeader;
+CAN_RxHeaderTypeDef RxHeader;
+uint8_t TxData[4];
+uint8_t RxData[4];
+uint32_t TxMailbox;
+
+int16_t rpm_A_1;
+int16_t rpm_A_2;
+int16_t rpm_B_1;
+int16_t rpm_B_2;
 
 /* USER CODE END PV */
 
@@ -57,6 +79,62 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+
+
+// Function to send speed data
+void send_speed(int16_t speed1, int16_t speed2, uint32_t can_id) {
+    TxHeader.StdId = can_id; // Set CAN ID based on target device
+    TxHeader.DLC = 4;        // Data length code, 4 bytes
+    TxData[0] = speed1 & 0xFF;
+    TxData[1] = (speed1 >> 8) & 0xFF;
+    TxData[2] = speed2 & 0xFF;
+    TxData[3] = (speed2 >> 8) & 0xFF;
+    HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailbox); // Transmit the message
+}
+
+// Function to receive RPM data
+void receive_rpm(void) {
+    if (HAL_CAN_GetRxFifoFillLevel(&hcan, CAN_RX_FIFO0) != 0) { // Check if FIFO has messages
+        HAL_CAN_GetRxMessage(&hcan, CAN_RX_FIFO0, &RxHeader, RxData); // Retrieve the message
+        if (RxHeader.StdId == CAN_ID_RPM_A) {
+            // Decode RPM data from Device A
+            int16_t rpm_A_1 = (RxData[1] << 8) | RxData[0];
+            int16_t rpm_A_2 = (RxData[3] << 8) | RxData[2];
+            // Process RPM data from Device A
+        } else if (RxHeader.StdId == CAN_ID_RPM_B) {
+            // Decode RPM data from Device B
+            int16_t rpm_B_1 = (RxData[1] << 8) | RxData[0];
+            int16_t rpm_B_2 = (RxData[3] << 8) | RxData[2];
+            // Process RPM data from Device B
+        }
+    }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+	if(huart==&huart1){
+			//readValuePack(&rx_pack_ptr);
+			//send_speed(rx_pack_ptr.shorts[0],rx_pack_ptr.shorts[1],CAN_ID_SPEED_A);
+			//send_speed(rx_pack_ptr.shorts[2],rx_pack_ptr.shorts[3],CAN_ID_SPEED_B);
+		
+			//MoveMecanumWheels(rx_pack_ptr.shorts[0],rx_pack_ptr.shorts[1],rx_pack_ptr.shorts[2]);
+			}
+}
+
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	if(htim==&htim2){
+		//receive_rpm();
+		readValuePack(&rx_pack_ptr);
+			send_speed(rx_pack_ptr.shorts[0],rx_pack_ptr.shorts[1],CAN_ID_SPEED_A);
+			send_speed(rx_pack_ptr.shorts[2],rx_pack_ptr.shorts[3],CAN_ID_SPEED_B);
+		
+			//readValuePack(&rx_pack_ptr);
+			//MoveMecanumWheels(rx_pack_ptr.shorts[0],rx_pack_ptr.shorts[1],rx_pack_ptr.shorts[2]);
+			//SetMecanumWheels(rx_pack_ptr.shorts[0],rx_pack_ptr.shorts[1],rx_pack_ptr.shorts[2],rx_pack_ptr.shorts[3]);
+	}
+}
 
 /* USER CODE END 0 */
 
@@ -88,6 +166,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_CAN_Init();
   MX_TIM2_Init();
   MX_TIM4_Init();
@@ -95,6 +174,12 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
+
+	HAL_TIM_Base_Start_IT(&htim2);
+	
+	HAL_UART_Receive_DMA(&huart1,vp_rxbuff,VALUEPACK_BUFFER_SIZE);
+	
+	HAL_CAN_Start(&hcan);
 
   /* USER CODE END 2 */
 

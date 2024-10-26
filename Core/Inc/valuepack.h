@@ -24,7 +24,7 @@
 
 #define RX_BOOL_NUM  0
 #define RX_BYTE_NUM  0
-#define RX_SHORT_NUM 3
+#define RX_SHORT_NUM 4
 #define RX_INT_NUM   0
 #define RX_FLOAT_NUM 0
 
@@ -80,7 +80,7 @@ typedef struct
 }RxPack;
 // 初始化 valuepack 包括一些必要的硬件外设配置
 
-void initValuePack(int baudrate);
+//void initValuePack(int baudrate);
 
 // 需要保证至少每秒执行10次该函数
 // 该函数的主要过程是先解析接收的缓冲区，如果接收到完整的RX数据包，则解析RX数据包中的数据，然后开始串口发送TX数据包 。
